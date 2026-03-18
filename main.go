@@ -2,8 +2,7 @@ package main
 
 import (
 	"net/http"
-
-	v1handlers "vault/api/v1"
+	"vault/misc/versioning"
 
 	"github.com/gin-gonic/gin"
 )
@@ -11,15 +10,14 @@ import (
 func main() {
 	router := gin.Default()
 
-	v1 := router.Group("/api/v1")
+	api := router.Group("/api")
 
-	v1.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
+	// ping
+	versioning.RegisterVersionedRoute(api, http.MethodGet, versioning.EndpointPing)
 
-	v1handlers.Auth(v1.Group("/auth"))
+	// auth
+	versioning.RegisterVersionedRoute(api, http.MethodPost, versioning.EndpointRegister)
+	versioning.RegisterVersionedRoute(api, http.MethodPost, versioning.EndpointLogin)
 
 	err := router.Run(":27462")
 	if err != nil {
