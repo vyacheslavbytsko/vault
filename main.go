@@ -44,6 +44,10 @@ func main() {
 	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointLogin)
 	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointMe, middleware.RequireJWT(jwtManager))
 
+	// repositories
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointRepo, middleware.RequireJWT(jwtManager))
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRepo, middleware.RequireJWT(jwtManager))
+
 	err = router.Run(":27462")
 	if err != nil {
 		log.Fatal(err)

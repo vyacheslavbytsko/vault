@@ -4,6 +4,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"vault/internal/database/migrations"
 	"vault/internal/database/models"
 )
 
@@ -14,5 +15,9 @@ func New(databaseURL string) (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(&models.User{})
+	if err := db.AutoMigrate(&models.User{}, &models.Repository{}); err != nil {
+		return err
+	}
+
+	return migrations.RemoveUsersUpdatedAt(db)
 }

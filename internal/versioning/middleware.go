@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RouteByVersion(handlersByVersion map[string]EndpointHandlers, endpoint string) gin.HandlerFunc {
+func RouteByVersion(handlersByVersion map[string]EndpointHandlers, method string, endpoint string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		version := c.GetHeader(HeaderAPIVersion)
 		if version == "" {
@@ -22,8 +22,25 @@ func RouteByVersion(handlersByVersion map[string]EndpointHandlers, endpoint stri
 			return
 		}
 
-		handler, ok := handlers[endpoint]
+		methodHandlers, methodOk := handlers[method]
+		if !methodOk {
+			c.AbortWithStatusJSON(http.StatusMethodNotAllowed, gin.H{
+				"message": fmt.Sprintf("method %s is not available for version %s", method, version),
+			})
+			return
+		}
+
+		handler, ok := methodHandlers[endpoint]
 		if !ok {
+			for _, byEndpoint := range handlers {
+				if _, exists := byEndpoint[endpoint]; exists {
+					c.AbortWithStatusJSON(http.StatusMethodNotAllowed, gin.H{
+						"message": fmt.Sprintf("method %s is not allowed for endpoint %s", method, endpoint),
+					})
+					return
+				}
+			}
+
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"message": fmt.Sprintf("endpoint %s is not available for version %s", endpoint, version),
 			})
