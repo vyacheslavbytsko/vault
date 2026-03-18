@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterV1(c *gin.Context) {
+func RegisterV1dot0(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"message": "register endpoint not implemented yet",
 	})

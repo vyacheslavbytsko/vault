@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func LoginV1(c *gin.Context) {
+func LoginV1dot0(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{
 		"message": "login endpoint not implemented yet",
 	})

@@ -2,8 +2,8 @@ package versioning
 
 const (
 	HeaderAPIVersion  = "X-Vault-API-Version"
-	VersionV1         = "v1"
-	DefaultAPIVersion = VersionV1
+	VersionV1dot0     = "v1.0"
+	DefaultAPIVersion = VersionV1dot0
 )
 
 const (

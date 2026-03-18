@@ -10,9 +10,9 @@ import (
 type endpointHandlers map[string]gin.HandlerFunc
 
 var handlersByVersion = map[string]endpointHandlers{
-	VersionV1: {
-		EndpointPing:     misc.PingV1,
-		EndpointRegister: auth.RegisterV1,
-		EndpointLogin:    auth.LoginV1,
+	VersionV1dot0: {
+		EndpointPing:     misc.PingV1dot0,
+		EndpointRegister: auth.RegisterV1dot0,
+		EndpointLogin:    auth.LoginV1dot0,
 	},
 }
