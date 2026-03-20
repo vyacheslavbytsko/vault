@@ -4,10 +4,10 @@ import (
 	"log"
 	"net/http"
 	"vault/internal/app"
+	"vault/internal/auth"
 	"vault/internal/config"
 	"vault/internal/database"
 	"vault/internal/middleware"
-	"vault/internal/security"
 	"vault/internal/versioning"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +28,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	accessJWTManager := security.NewJWTManager(env.JWTSecret, env.AccessJWTTTLSeconds, security.TokenTypeAccess)
-	refreshJWTManager := security.NewJWTManager(env.JWTSecret, env.RefreshJWTTTLSeconds, security.TokenTypeRefresh)
+	accessJWTManager := auth.NewJWTManager(env.JWTSecret, env.AccessJWTTTLSeconds, auth.TokenTypeAccess)
+	refreshJWTManager := auth.NewJWTManager(env.JWTSecret, env.RefreshJWTTTLSeconds, auth.TokenTypeRefresh)
 	deps := app.NewDependencies(db, accessJWTManager, refreshJWTManager)
 	handlersByVersion := versioning.NewHandlersByVersion(deps)
 
@@ -43,12 +43,12 @@ func main() {
 	// auth
 	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRegister)
 	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointLogin)
-	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRefresh, middleware.RequireJWT(refreshJWTManager, security.TokenTypeRefresh))
-	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointMe, middleware.RequireJWT(accessJWTManager, security.TokenTypeAccess))
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRefresh, middleware.RequireJWT(refreshJWTManager, auth.TokenTypeRefresh))
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointMe, middleware.RequireJWT(accessJWTManager, auth.TokenTypeAccess))
 
 	// repositories
-	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointRepo, middleware.RequireJWT(accessJWTManager, security.TokenTypeAccess))
-	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRepo, middleware.RequireJWT(accessJWTManager, security.TokenTypeAccess))
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodGet, versioning.EndpointRepo, middleware.RequireJWT(accessJWTManager, auth.TokenTypeAccess))
+	versioning.RegisterVersionedRoute(api, handlersByVersion, http.MethodPost, versioning.EndpointRepo, middleware.RequireJWT(accessJWTManager, auth.TokenTypeAccess))
 
 	err = router.Run(":27462")
 	if err != nil {

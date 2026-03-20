@@ -1,18 +1,18 @@
 package app
 
 import (
-	"gorm.io/gorm"
+	"vault/internal/auth"
 
-	"vault/internal/security"
+	"gorm.io/gorm"
 )
 
 type Dependencies struct {
 	DB                *gorm.DB
-	AccessJWTManager  *security.JWTManager
-	RefreshJWTManager *security.JWTManager
+	AccessJWTManager  *auth.JWTManager
+	RefreshJWTManager *auth.JWTManager
 }
 
-func NewDependencies(db *gorm.DB, accessJWTManager *security.JWTManager, refreshJWTManager *security.JWTManager) *Dependencies {
+func NewDependencies(db *gorm.DB, accessJWTManager *auth.JWTManager, refreshJWTManager *auth.JWTManager) *Dependencies {
 	return &Dependencies{
 		DB:                db,
 		AccessJWTManager:  accessJWTManager,

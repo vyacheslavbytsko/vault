@@ -3,11 +3,10 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"vault/internal/auth"
 
 	"vault/internal/app"
-	internalAuth "vault/internal/auth"
 	"vault/internal/database/models"
-	"vault/internal/security"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -35,7 +34,7 @@ func RegisterV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		passwordHash, err := security.HashPassword(request.Password)
+		passwordHash, err := auth.HashPassword(request.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to hash password",
@@ -62,7 +61,7 @@ func RegisterV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		tokens, err := internalAuth.IssueTokenPairForNewSession(deps, user, c.GetHeader("User-Agent"))
+		tokens, err := auth.IssueTokenPairForNewSession(deps.DB, deps.AccessJWTManager, deps.RefreshJWTManager, user, c.GetHeader("User-Agent"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to generate tokens",

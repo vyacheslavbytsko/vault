@@ -2,7 +2,6 @@ package auth
 
 import (
 	"strings"
-	"vault/internal/app"
 	"vault/internal/database/models"
 
 	"github.com/google/uuid"
@@ -18,7 +17,7 @@ type TokenPair struct {
 	RefreshExpiresAt int64
 }
 
-func IssueTokenPairForNewSession(deps *app.Dependencies, user models.User, sessionName string) (TokenPair, error) {
+func IssueTokenPairForNewSession(db *gorm.DB, accessJWTManager *JWTManager, refreshJWTManager *JWTManager, user models.User, sessionName string) (TokenPair, error) {
 	sessionName = normalizeSessionName(sessionName)
 
 	refreshTokenID := uuid.NewString()
@@ -29,12 +28,12 @@ func IssueTokenPairForNewSession(deps *app.Dependencies, user models.User, sessi
 	}
 
 	var tokens TokenPair
-	err := deps.DB.Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&session).Error; err != nil {
 			return err
 		}
 
-		pair, err := generateTokenPairForSession(deps, user, session.ID, refreshTokenID)
+		pair, err := generateTokenPairForSession(accessJWTManager, refreshJWTManager, user, session.ID, refreshTokenID)
 		if err != nil {
 			return err
 		}
@@ -49,12 +48,12 @@ func IssueTokenPairForNewSession(deps *app.Dependencies, user models.User, sessi
 	return tokens, nil
 }
 
-func IssueTokenPairForExistingSession(deps *app.Dependencies, user models.User, session models.Session, expectedRefreshTokenID string) (TokenPair, error) {
+func IssueTokenPairForExistingSession(db *gorm.DB, accessJWTManager *JWTManager, refreshJWTManager *JWTManager, user models.User, session models.Session, expectedRefreshTokenID string) (TokenPair, error) {
 	refreshTokenID := uuid.NewString()
 
 	var tokens TokenPair
-	err := deps.DB.Transaction(func(tx *gorm.DB) error {
-		pair, err := generateTokenPairForSession(deps, user, session.ID, refreshTokenID)
+	err := db.Transaction(func(tx *gorm.DB) error {
+		pair, err := generateTokenPairForSession(accessJWTManager, refreshJWTManager, user, session.ID, refreshTokenID)
 		if err != nil {
 			return err
 		}
@@ -80,13 +79,13 @@ func IssueTokenPairForExistingSession(deps *app.Dependencies, user models.User, 
 	return tokens, nil
 }
 
-func generateTokenPairForSession(deps *app.Dependencies, user models.User, sessionID string, refreshTokenID string) (TokenPair, error) {
-	accessToken, accessExpiresAt, err := deps.AccessJWTManager.GenerateToken(sessionID, user.ID, refreshTokenID)
+func generateTokenPairForSession(accessJWTManager *JWTManager, refreshJWTManager *JWTManager, user models.User, sessionID string, refreshTokenID string) (TokenPair, error) {
+	accessToken, accessExpiresAt, err := accessJWTManager.GenerateToken(sessionID, user.ID, refreshTokenID)
 	if err != nil {
 		return TokenPair{}, err
 	}
 
-	refreshToken, refreshExpiresAt, err := deps.RefreshJWTManager.GenerateToken(sessionID, user.ID, refreshTokenID)
+	refreshToken, refreshExpiresAt, err := refreshJWTManager.GenerateToken(sessionID, user.ID, refreshTokenID)
 	if err != nil {
 		return TokenPair{}, err
 	}

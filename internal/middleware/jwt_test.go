@@ -5,8 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"vault/internal/security"
+	"vault/internal/auth"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,7 +15,7 @@ func TestRequireJWT_AllowsExpectedTokenType(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	manager := security.NewJWTManager("test-secret", time.Hour, security.TokenTypeAccess)
+	manager := auth.NewJWTManager("test-secret", time.Hour, auth.TokenTypeAccess)
 	token, _, err := manager.GenerateToken("session-id", "user-id", "refresh-token-id")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
@@ -27,7 +26,7 @@ func TestRequireJWT_AllowsExpectedTokenType(t *testing.T) {
 	ctx.Request = req
 
 	called := false
-	RequireJWT(manager, security.TokenTypeAccess)(ctx)
+	RequireJWT(manager, auth.TokenTypeAccess)(ctx)
 	if !ctx.IsAborted() {
 		called = true
 	}
@@ -42,7 +41,7 @@ func TestRequireJWT_RejectsUnexpectedTokenType(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 
-	refreshManager := security.NewJWTManager("test-secret", 24*time.Hour, security.TokenTypeRefresh)
+	refreshManager := auth.NewJWTManager("test-secret", 24*time.Hour, auth.TokenTypeRefresh)
 	refreshToken, _, err := refreshManager.GenerateToken("session-id", "user-id", "refresh-token-id")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
@@ -52,8 +51,8 @@ func TestRequireJWT_RejectsUnexpectedTokenType(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+refreshToken)
 	ctx.Request = req
 
-	accessParserManager := security.NewJWTManager("test-secret", time.Hour, security.TokenTypeAccess)
-	RequireJWT(accessParserManager, security.TokenTypeAccess)(ctx)
+	accessParserManager := auth.NewJWTManager("test-secret", time.Hour, auth.TokenTypeAccess)
+	RequireJWT(accessParserManager, auth.TokenTypeAccess)(ctx)
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("RequireJWT() status = %d, expected %d", recorder.Code, http.StatusUnauthorized)

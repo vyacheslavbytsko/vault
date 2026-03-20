@@ -3,9 +3,8 @@ package auth
 import (
 	"errors"
 	"net/http"
-
 	"vault/internal/app"
-	internalAuth "vault/internal/auth"
+	"vault/internal/auth"
 	"vault/internal/database/models"
 	"vault/internal/middleware"
 
@@ -75,7 +74,7 @@ func RefreshV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		tokens, err := internalAuth.IssueTokenPairForExistingSession(deps, user, session, tokenRefreshTokenID)
+		tokens, err := auth.IssueTokenPairForExistingSession(deps.DB, deps.AccessJWTManager, deps.RefreshJWTManager, user, session, tokenRefreshTokenID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.JSON(http.StatusUnauthorized, gin.H{

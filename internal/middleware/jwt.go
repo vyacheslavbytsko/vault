@@ -3,13 +3,12 @@ package middleware
 import (
 	"net/http"
 	"strings"
-
-	"vault/internal/security"
+	"vault/internal/auth"
 
 	"github.com/gin-gonic/gin"
 )
 
-func RequireJWT(jwtManager *security.JWTManager, expectedTokenType security.TokenType) gin.HandlerFunc {
+func RequireJWT(jwtManager *auth.JWTManager, expectedTokenType auth.TokenType) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if jwtManager == nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
@@ -42,7 +41,7 @@ func RequireJWT(jwtManager *security.JWTManager, expectedTokenType security.Toke
 			return
 		}
 
-		authClaims, claimsOk := security.AuthClaimsFromToken(claims)
+		authClaims, claimsOk := auth.AuthClaimsFromToken(claims)
 		if !claimsOk {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "invalid token claims",
