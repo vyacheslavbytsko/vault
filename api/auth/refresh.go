@@ -1,25 +1,28 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 
 	"vault/internal/app"
+	internalAuth "vault/internal/auth"
 	"vault/internal/database/models"
 	"vault/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func RefreshV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if deps == nil || deps.AccessJWTManager == nil || deps.RefreshJWTManager == nil {
+		if deps == nil || deps.DB == nil || deps.AccessJWTManager == nil || deps.RefreshJWTManager == nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "auth is not configured",
 			})
 			return
 		}
 
-		userID, login, ok := middleware.GetCurrentUser(c)
+		userID, ok := middleware.GetCurrentUser(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"message": "unauthorized",
@@ -27,8 +30,60 @@ func RefreshV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		tokens, err := issueTokenPair(deps, models.User{ID: userID, Login: login})
+		sessionID, tokenRefreshTokenID, ok := middleware.GetCurrentSession(c)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"message": "unauthorized",
+			})
+			return
+		}
+
+		var session models.Session
+		if err := deps.DB.Where("id = ? AND account_id = ?", sessionID, userID).First(&session).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"message": "invalid session",
+				})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to load session",
+			})
+			return
+		}
+
+		if session.RefreshTokenID != tokenRefreshTokenID {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"message": "refresh token is no longer valid",
+			})
+			return
+		}
+
+		var user models.User
+		if err := deps.DB.Select("id", "login").Where("id = ?", userID).First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"message": "unauthorized",
+				})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to load user",
+			})
+			return
+		}
+
+		tokens, err := internalAuth.IssueTokenPairForExistingSession(deps, user, session, tokenRefreshTokenID)
 		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"message": "refresh token is no longer valid",
+				})
+				return
+			}
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to generate tokens",
 			})
@@ -36,8 +91,8 @@ func RefreshV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":                 userID,
-			"login":              login,
+			"id":                 user.ID,
+			"login":              user.Login,
 			"token_type":         "Bearer",
 			"access_token":       tokens.AccessToken,
 			"access_expires_at":  tokens.AccessExpiresAt,

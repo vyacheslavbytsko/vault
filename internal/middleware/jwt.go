@@ -42,26 +42,25 @@ func RequireJWT(jwtManager *security.JWTManager, expectedTokenType security.Toke
 			return
 		}
 
-		tokenType, tokenTypeOk := security.TokenTypeFromClaims(claims)
-		if !tokenTypeOk || tokenType != expectedTokenType {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "invalid token type",
-			})
-			return
-		}
-
-		userID, userIDOk := claims["sub"].(string)
-		login, loginOk := claims["login"].(string)
-		if !userIDOk || !loginOk || userID == "" || login == "" {
+		authClaims, claimsOk := security.AuthClaimsFromToken(claims)
+		if !claimsOk {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "invalid token claims",
 			})
 			return
 		}
 
+		if authClaims.TokenType != expectedTokenType {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "invalid token type",
+			})
+			return
+		}
+
 		c.Set(ContextAuthClaimsKey, claims)
-		c.Set(ContextAuthUserIDKey, userID)
-		c.Set(ContextAuthLoginKey, login)
+		c.Set(ContextAuthSessionIDKey, authClaims.SessionID)
+		c.Set(ContextAuthUserIDKey, authClaims.AccountID)
+		c.Set(ContextAuthRefreshTokenIDKey, authClaims.RefreshTokenID)
 		c.Next()
 	}
 }

@@ -8,7 +8,7 @@ import (
 func TestGenerateToken(t *testing.T) {
 	manager := NewJWTManager("test-secret", 5*time.Minute, TokenTypeAccess)
 
-	token, expiresAt, err := manager.GenerateToken("user-id", "user-login")
+	token, expiresAt, err := manager.GenerateToken("session-id", "user-id", "refresh-token-id")
 	if err != nil {
 		t.Fatalf("GenerateToken() error = %v", err)
 	}
@@ -34,18 +34,31 @@ func TestGenerateToken(t *testing.T) {
 	if tokenType != TokenTypeAccess {
 		t.Fatalf("TokenTypeFromClaims() = %s, expected %s", tokenType, TokenTypeAccess)
 	}
+
+	authClaims, ok := AuthClaimsFromToken(claims)
+	if !ok {
+		t.Fatal("AuthClaimsFromToken() expected claims")
+	}
+
+	if authClaims.SessionID != "session-id" || authClaims.AccountID != "user-id" {
+		t.Fatalf("AuthClaimsFromToken() unexpected claims = %+v", authClaims)
+	}
+
+	if authClaims.RefreshTokenID != "" {
+		t.Fatalf("AuthClaimsFromToken() access token should not carry refresh token id, got %q", authClaims.RefreshTokenID)
+	}
 }
 
 func TestTokenTypeFromClaims(t *testing.T) {
 	accessManager := NewJWTManager("test-secret", 5*time.Minute, TokenTypeAccess)
 	refreshManager := NewJWTManager("test-secret", 24*time.Hour, TokenTypeRefresh)
 
-	accessToken, _, err := accessManager.GenerateToken("user-id", "user-login")
+	accessToken, _, err := accessManager.GenerateToken("session-id", "user-id", "refresh-token-id")
 	if err != nil {
 		t.Fatalf("GenerateToken(access) error = %v", err)
 	}
 
-	refreshToken, _, err := refreshManager.GenerateToken("user-id", "user-login")
+	refreshToken, _, err := refreshManager.GenerateToken("session-id", "user-id", "refresh-token-id")
 	if err != nil {
 		t.Fatalf("GenerateToken(refresh) error = %v", err)
 	}
@@ -66,5 +79,14 @@ func TestTokenTypeFromClaims(t *testing.T) {
 
 	if tokenType, ok := TokenTypeFromClaims(refreshClaims); !ok || tokenType != TokenTypeRefresh {
 		t.Fatalf("TokenTypeFromClaims(refresh) = %s, %v", tokenType, ok)
+	}
+
+	refreshAuthClaims, ok := AuthClaimsFromToken(refreshClaims)
+	if !ok {
+		t.Fatal("AuthClaimsFromToken(refresh) expected claims")
+	}
+
+	if refreshAuthClaims.RefreshTokenID != "refresh-token-id" {
+		t.Fatalf("AuthClaimsFromToken(refresh) refresh token id = %q, expected %q", refreshAuthClaims.RefreshTokenID, "refresh-token-id")
 	}
 }

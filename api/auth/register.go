@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"vault/internal/app"
+	internalAuth "vault/internal/auth"
 	"vault/internal/database/models"
 	"vault/internal/security"
 
@@ -61,7 +62,7 @@ func RegisterV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		tokens, err := issueTokenPair(deps, user)
+		tokens, err := internalAuth.IssueTokenPairForNewSession(deps, user, c.GetHeader("User-Agent"))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to generate tokens",
