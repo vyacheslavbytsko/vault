@@ -19,7 +19,7 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Session{},
-		&models.Repository{},
+		&models.Chain{},
 		&models.Event{},
 		&models.File{},
 	); err != nil {
@@ -27,8 +27,8 @@ func Migrate(db *gorm.DB) error {
 	}
 
 	queries := []string{
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_events_repository_root_unique ON events (repository_id) WHERE parent_id IS NULL`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_events_repository_parent_unique ON events (repository_id, parent_id) WHERE parent_id IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_events_chain_root_unique ON events (chain_id) WHERE parent_id IS NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_events_chain_parent_unique ON events (chain_id, parent_id) WHERE parent_id IS NOT NULL`,
 	}
 
 	for _, query := range queries {

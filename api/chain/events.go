@@ -1,4 +1,4 @@
-package repo
+package chain
 
 import (
 	"errors"
@@ -60,9 +60,9 @@ func AppendEventV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		repoID, err := uuid.Parse(c.Param("id"))
+		chainID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid repository id"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid chain id"})
 			return
 		}
 
@@ -109,33 +109,33 @@ func AppendEventV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		var repository models.Repository
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", repoID).Take(&repository).Error; err != nil {
+		var chain models.Chain
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", chainID).Take(&chain).Error; err != nil {
 			rollback()
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"message": "repository not found"})
+				c.JSON(http.StatusNotFound, gin.H{"message": "chain not found"})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load repository"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load chain"})
 			return
 		}
 
-		if !sameEventID(parentID, repository.LastEventID) {
+		if !sameEventID(parentID, chain.LastEventID) {
 			rollback()
 			c.JSON(http.StatusConflict, conflictResponse{
 				Error:             "conflict",
-				ServerLastEventID: uuidToStringPtr(repository.LastEventID),
+				ServerLastEventID: uuidToStringPtr(chain.LastEventID),
 			})
 			return
 		}
 
 		event := models.Event{
-			EventID:      eventID,
-			RepositoryID: repoID,
-			ParentID:     parentID,
-			SessionID:    sessionID,
-			Payload:      request.Payload,
+			EventID:   eventID,
+			ChainID:   chainID,
+			ParentID:  parentID,
+			SessionID: sessionID,
+			Payload:   request.Payload,
 		}
 
 		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "event_id"}}, DoNothing: true}).Create(&event)
@@ -144,7 +144,7 @@ func AppendEventV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 				rollback()
 				c.JSON(http.StatusConflict, conflictResponse{
 					Error:             "conflict",
-					ServerLastEventID: uuidToStringPtr(repository.LastEventID),
+					ServerLastEventID: uuidToStringPtr(chain.LastEventID),
 				})
 				return
 			}
@@ -164,9 +164,9 @@ func AppendEventV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		if err := tx.Model(&models.Repository{}).Where("id = ?", repoID).Update("last_event_id", eventID).Error; err != nil {
+		if err := tx.Model(&models.Chain{}).Where("id = ?", chainID).Update("last_event_id", eventID).Error; err != nil {
 			rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to update repository state"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to update chain state"})
 			return
 		}
 
@@ -191,20 +191,20 @@ func FetchEventsV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		repoID, err := uuid.Parse(c.Param("id"))
+		chainID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid repository id"})
+			c.JSON(http.StatusBadRequest, gin.H{"message": "invalid chain id"})
 			return
 		}
 
-		var repository models.Repository
-		if err := deps.DB.Where("id = ?", repoID).Take(&repository).Error; err != nil {
+		var chain models.Chain
+		if err := deps.DB.Where("id = ?", chainID).Take(&chain).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				c.JSON(http.StatusNotFound, gin.H{"message": "repository not found"})
+				c.JSON(http.StatusNotFound, gin.H{"message": "chain not found"})
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load repository"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to load chain"})
 			return
 		}
 
@@ -229,7 +229,7 @@ func FetchEventsV1dot0(deps *app.Dependencies) gin.HandlerFunc {
 			}
 		}
 
-		events, err := fetchEventsAfterCursor(deps.DB, repoID, sinceID, limit)
+		events, err := fetchEventsAfterCursor(deps.DB, chainID, sinceID, limit)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				c.JSON(http.StatusNotFound, gin.H{"message": "since event not found"})
@@ -275,19 +275,19 @@ func parseFetchCursor(request SyncRequest) (*uuid.UUID, error) {
 	return &parsed, nil
 }
 
-func fetchEventsAfterCursor(db *gorm.DB, repoID uuid.UUID, sinceID *uuid.UUID, limit int) ([]models.Event, error) {
+func fetchEventsAfterCursor(db *gorm.DB, chainID uuid.UUID, sinceID *uuid.UUID, limit int) ([]models.Event, error) {
 	events := make([]models.Event, 0, limit)
 	current := sinceID
 
 	if current != nil {
 		var base models.Event
-		if err := db.Where("repository_id = ? AND event_id = ?", repoID, *current).Take(&base).Error; err != nil {
+		if err := db.Where("chain_id = ? AND event_id = ?", chainID, *current).Take(&base).Error; err != nil {
 			return nil, err
 		}
 	}
 
 	for len(events) < limit {
-		next, err := loadNextEvent(db, repoID, current)
+		next, err := loadNextEvent(db, chainID, current)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				break
@@ -303,8 +303,8 @@ func fetchEventsAfterCursor(db *gorm.DB, repoID uuid.UUID, sinceID *uuid.UUID, l
 	return events, nil
 }
 
-func loadNextEvent(db *gorm.DB, repoID uuid.UUID, parentID *uuid.UUID) (*models.Event, error) {
-	query := db.Where("repository_id = ?", repoID)
+func loadNextEvent(db *gorm.DB, chainID uuid.UUID, parentID *uuid.UUID) (*models.Event, error) {
+	query := db.Where("chain_id = ?", chainID)
 	if parentID == nil {
 		query = query.Where("parent_id IS NULL")
 	} else {
