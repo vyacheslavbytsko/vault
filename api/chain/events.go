@@ -276,33 +276,92 @@ func parseFetchCursor(request SyncRequest) (*uuid.UUID, error) {
 }
 
 func fetchEventsAfterCursor(db *gorm.DB, chainID uuid.UUID, sinceID *uuid.UUID, limit int) ([]models.Event, error) {
-	events := make([]models.Event, 0, limit)
-	current := sinceID
+	if limit <= 0 {
+		return []models.Event{}, nil
+	}
 
-	if current != nil {
+	if sinceID != nil {
 		var base models.Event
-		if err := db.Where("chain_id = ? AND event_id = ?", chainID, *current).Take(&base).Error; err != nil {
+		if err := db.Where("chain_id = ? AND event_id = ?", chainID, *sinceID).Take(&base).Error; err != nil {
 			return nil, err
 		}
 	}
 
-	for len(events) < limit {
-		next, err := loadNextEvent(db, chainID, current)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				break
-			}
+	tableName, err := eventTableName(db)
+	if err != nil {
+		return nil, err
+	}
 
+	events := make([]models.Event, 0, limit)
+
+	if sinceID == nil {
+		query := fmt.Sprintf(`
+WITH RECURSIVE event_chain AS (
+    SELECT e.*
+    FROM %s AS e
+    WHERE e.chain_id = ? AND e.parent_id IS NULL
+    LIMIT 1
+
+    UNION ALL
+
+    SELECT child.*
+    FROM event_chain AS ec
+    JOIN LATERAL (
+        SELECT e.*
+        FROM %s AS e
+        WHERE e.chain_id = ? AND e.parent_id = ec.event_id
+        LIMIT 1
+    ) AS child ON true
+)
+SELECT *
+FROM event_chain
+LIMIT ?`, tableName, tableName)
+
+		if err := db.Raw(query, chainID, chainID, limit).Scan(&events).Error; err != nil {
 			return nil, err
 		}
 
-		events = append(events, *next)
-		current = &next.EventID
+		return events, nil
+	}
+
+	query := fmt.Sprintf(`
+WITH RECURSIVE event_chain AS (
+    SELECT e.*
+    FROM %s AS e
+    WHERE e.chain_id = ? AND e.event_id = ?
+    LIMIT 1
+
+    UNION ALL
+
+    SELECT child.*
+    FROM event_chain AS ec
+    JOIN LATERAL (
+        SELECT e.*
+        FROM %s AS e
+        WHERE e.chain_id = ? AND e.parent_id = ec.event_id
+        LIMIT 1
+    ) AS child ON true
+)
+SELECT *
+FROM event_chain
+WHERE event_id <> ?
+LIMIT ?`, tableName, tableName)
+
+	if err := db.Raw(query, chainID, *sinceID, chainID, *sinceID, limit).Scan(&events).Error; err != nil {
+		return nil, err
 	}
 
 	return events, nil
 }
 
+func eventTableName(db *gorm.DB) (string, error) {
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(&models.Event{}); err != nil {
+		return "", err
+	}
+
+	return stmt.Schema.Table, nil
+}
 func loadNextEvent(db *gorm.DB, chainID uuid.UUID, parentID *uuid.UUID) (*models.Event, error) {
 	query := db.Where("chain_id = ?", chainID)
 	if parentID == nil {
